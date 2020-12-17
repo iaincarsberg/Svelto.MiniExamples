@@ -54,7 +54,7 @@ namespace MiniExamples.DeterministicPhysicDemo
                 _graphics?.RenderStart();
                 _scheduler.ExecuteGraphics(physicsAction.CalculateNormalisedDelta());
 
-                _schedulerReporter.IncrementFpsCount();
+                _schedulerReporter.IncrementFps();
                 if (_graphics != null)
                     _schedulerReporter.Report(_graphics);
 

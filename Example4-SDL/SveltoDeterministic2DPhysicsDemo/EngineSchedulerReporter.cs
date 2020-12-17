@@ -6,7 +6,7 @@ namespace MiniExamples.DeterministicPhysicDemo
     public interface IEngineSchedulerReporter
     {
         void        RecordTicksSpent(string engine, long delta);
-        void        IncrementFpsCount();
+        void        IncrementFps();
         public void Report(IGraphics graphics);
         public void Reset();
     }
@@ -23,7 +23,7 @@ namespace MiniExamples.DeterministicPhysicDemo
             _ticksSpent[engine] += delta;
         }
 
-        public void IncrementFpsCount()
+        public void IncrementFps()
         {
             _fpsAccumulator += 1;
         }
