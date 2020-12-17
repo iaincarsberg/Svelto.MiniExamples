@@ -41,9 +41,9 @@ namespace MiniExamples.DeterministicPhysicDemo
             }
 
             graphics.DrawTextAbsolute(Colour.White, 0, row * (PtSize + 2)
-                , $"total = {(float) usedDelta / 1000:0000.0000}ms");
+                                    , $"total = {(float) usedDelta / 1000:0000.0000}ms");
             graphics.DrawTextAbsolute(Colour.White, 0, (row + 1) * (PtSize + 2)
-                , $"fps = {_fps}");
+                                    , $"fps = {_fps}");
         }
 
         public void Reset()
