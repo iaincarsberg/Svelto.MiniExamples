@@ -70,3 +70,20 @@ Update Mode: updateDependencies
 
 The following packages were updated:
   com.unity.ide.visualstudio from version 2.0.2 to 2.0.3
+
+=== Wed Dec 23 14:23:45 2020
+
+Packages were changed.
+Update Mode: updateDependencies
+
+The following packages were updated:
+  com.unity.addressables from version 1.16.7 to 1.16.10
+
+=== Sat Dec 26 13:33:44 2020
+
+Packages were changed.
+Update Mode: updateDependencies
+
+The following packages were updated:
+  com.unity.addressables from version 1.16.10 to 1.16.15
+  com.unity.ide.rider from version 3.0.2 to 3.0.3

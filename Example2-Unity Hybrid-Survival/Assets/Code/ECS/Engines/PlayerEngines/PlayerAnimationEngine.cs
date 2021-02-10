@@ -1,19 +1,7 @@
-using System.Collections;
-using Svelto.Common;
-using Svelto.ECS.Extensions;
-using Svelto.Tasks;
-
 namespace Svelto.ECS.Example.Survive.Characters.Player
 {
-    [Sequenced(nameof(EnginesEnum.PlayerAnimationEngine))]
-    public class PlayerAnimationEngine: IQueryingEntitiesEngine, IStepEngine
+    public class PlayerAnimationEngine: IQueryingEntitiesEngine, IStepEngine, IReactOnAddAndRemove<PlayerEntityViewComponent>
     {
-        public PlayerAnimationEngine(IEntityStreamConsumerFactory consumerFactory)
-        {
-            _consumerFactory = consumerFactory;
-            _deathCheck = DeathCheck();
-        }
-
         public EntitiesDB entitiesDB { get; set; }
 
         public void Ready()
@@ -36,30 +24,18 @@ namespace Svelto.ECS.Example.Survive.Characters.Player
                 // Tell the animator whether or not the player is walking.
                 playersView[i].animationComponent.animationState = new AnimationState("IsWalking", walking);
             }
-
-            _deathCheck.MoveNext();
         }
+        
+        public void Add(ref PlayerEntityViewComponent entityComponent, EGID egid) {  }
 
-        IEnumerator DeathCheck()
+        //this assumes that removing an entity means its death. If necessary I could check the group it comes from
+        //to have a sort of transition callback on state change
+        public void Remove(ref PlayerEntityViewComponent playerEntityView, EGID egid)
         {
-            var consumer = _consumerFactory.GenerateConsumer<DeathComponent>(ECSGroups.PlayersGroup, "PlayerDeathEngine", 1);
-            
-            while (true)
-            {
-                while (consumer.TryDequeue(out _, out EGID id))
-                {
-                    var playerEntityView = entitiesDB.QueryEntity<PlayerEntityViewComponent>(id);
-
-                    playerEntityView.animationComponent.playAnimation = "Die";
-                }
-
-                yield return null;
-            }
+            playerEntityView.rigidBodyComponent.isKinematic = true;
+            playerEntityView.animationComponent.playAnimation        = "Die";
         }
 
         public string name => nameof(PlayerAnimationEngine);
-        
-        readonly IEntityStreamConsumerFactory _consumerFactory;
-        readonly IEnumerator _deathCheck;
     }
 }

@@ -5,13 +5,9 @@ namespace Svelto.ECS.Example.Survive.Implementors
 {
     public class AnimatorImplementor : MonoBehaviour, IImplementor, IAnimationComponent
     {
-        Animator _anim;
-
-        string _animName;
-
         public string playAnimation
         {
-            get { return _animName; }
+            get => _animName;
             set
             {
                 _animName = value;
@@ -19,7 +15,7 @@ namespace Svelto.ECS.Example.Survive.Implementors
             }
         }
 
-        public AnimationState animationState { set { _anim.SetBool(value.name, value.state); } }
+        public AnimationState animationState { set => _anim.SetBool(value.name, value.state); }
 
         public bool reset
         {
@@ -31,5 +27,8 @@ namespace Svelto.ECS.Example.Survive.Implementors
         }
 
         void Awake() { _anim = GetComponent<Animator>(); }
+        
+        Animator _anim;
+        string   _animName;
     }
 }

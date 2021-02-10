@@ -1,46 +1,43 @@
 using System.Collections;
-using Svelto.Tasks;
+using Svelto.ECS.Example.Survive.Camera;
 using UnityEngine;
 
 namespace Svelto.ECS.Example.Survive.Characters.Player
 {
-    public class PlayerMovementEngine : IQueryingEntitiesEngine
+    public class PlayerMovementEngine : IQueryingEntitiesEngine, IStepEngine
     {
         const float camRayLength = 100f; // The length of the ray from the camera into the scene.
 
-        readonly IRayCaster                _rayCaster;
-        readonly ITime                     _time;
-
-        readonly int floorMask = LayerMask.GetMask("Floor"); // A layer mask so that a ray can be cast just at gameobjects on the floor layer.
-
-        public PlayerMovementEngine(IRayCaster raycaster, ITime time)
+        public PlayerMovementEngine(IRayCaster raycaster)
         {
-            _rayCaster   = raycaster;
-            _time        = time;
+            _rayCaster = raycaster;
+            _tick      = Tick();
         }
 
         public EntitiesDB entitiesDB { private get; set; }
 
-        public void Ready() { PhysicsTick().RunOnScheduler(StandardSchedulers.physicScheduler);}
+        public void   Ready() { }
+        public void   Step()  { _tick.MoveNext(); }
+        public string name    => nameof(PlayerMovementEngine);
 
-        IEnumerator PhysicsTick()
+        IEnumerator Tick()
         {
-            void PlayersMovement()
+            while (true)
             {
                 //Exploit everywhere the power of deconstruct to tuples. Every query entities can be deconstruct
                 //to what you are going to use directly
-                var (playersInput, players, count) = entitiesDB.QueryEntities<PlayerInputDataComponent, PlayerEntityViewComponent>(ECSGroups.PlayersGroup);
+                var (playersInput, speedInfos, playerViews, count) =
+                    entitiesDB.QueryEntities<PlayerInputDataComponent, SpeedComponent, PlayerEntityViewComponent>(
+                        ECSGroups.PlayersGroup);
 
+                //this demo has just one player, but I tried to abstract the assumption.
                 for (int i = 0; i < count; i++)
                 {
-                    Movement(ref playersInput[i], ref players[i]);
-                    Turning(ref playersInput[i], ref players[i]);
+                    Movement(playersInput[i], ref playerViews[i], speedInfos[i]);
+                    Turning(
+                        ref entitiesDB.QueryEntity<CameraEntityViewComponent>(
+                            playerViews[i].ID.entityID, ECSGroups.Camera), ref playerViews[i]);
                 }
-            }
-
-            while (true)
-            {
-                PlayersMovement();
 
                 yield return null; //don't forget to yield or you will enter in an infinite loop!
             }
@@ -53,41 +50,45 @@ namespace Svelto.ECS.Example.Survive.Characters.Player
         ///     entity components, so that here we can use inputComponent instead of
         ///     the class Input.
         /// </summary>
-        /// <param name="playerEntityView"></param>
-        /// <param name="entityView"></param>
-        void Movement(ref PlayerInputDataComponent playerEntityView, ref PlayerEntityViewComponent entityView)
+        /// <param name="playerInput"></param>
+        /// <param name="playerComponent"></param>
+        void Movement
+        (in PlayerInputDataComponent playerInput, ref PlayerEntityViewComponent playerComponent
+       , in SpeedComponent speedComponent)
         {
-            // Store the input axes.
-            var input = playerEntityView.input;
-
             // Normalise the movement vector and make it proportional to the speed per second.
-            var movement = input.normalized * entityView.speedComponent.movementSpeed * _time.deltaTime;
+            var movement = playerInput.input.normalized * speedComponent.movementSpeed;
 
             // Move the player to it's current position plus the movement.
-            entityView.transformComponent.position = entityView.positionComponent.position + movement;
+            playerComponent.rigidBodyComponent.velocity = movement;
         }
 
-        void Turning(ref PlayerInputDataComponent playerEntityView, ref PlayerEntityViewComponent entityView)
+        void Turning(ref CameraEntityViewComponent cameraInfo, ref PlayerEntityViewComponent playerComponent)
         {
             // Create a ray from the mouse cursor on screen in the direction of the camera.
-            var camRay = playerEntityView.camRay;
+            var camRay = cameraInfo.cameraComponent.camRay;
 
             // Perform the raycast and if it hits something on the floor layer...
-            Vector3 point;
-            if (_rayCaster.CheckHit(camRay, camRayLength, floorMask, out point))
+            if (_rayCaster.CheckHit(camRay, camRayLength, floorMask, out var point))
             {
                 // Create a vector from the player to the point on the floor the raycast from the mouse hit.
-                var playerToMouse = point - entityView.positionComponent.position;
+                var playerToMouse = point - playerComponent.positionComponent.position;
 
                 // Ensure the vector is entirely along the floor plane.
                 playerToMouse.y = 0f;
 
                 // Create a quaternion (rotation) based on looking down the vector from the player to the mouse.
-                var newRotatation = Quaternion.LookRotation(playerToMouse);
+                var newRotation = Quaternion.LookRotation(playerToMouse);
 
                 // Set the player's rotation to this new rotation.
-                entityView.transformComponent.rotation = newRotatation;
+                playerComponent.transformComponent.rotation = newRotation;
             }
         }
+
+        readonly IRayCaster _rayCaster;
+
+        readonly int floorMask = LayerMask.GetMask("Floor"); // A layer mask so that a ray can be cast just at gameobjects on the floor layer.
+
+        readonly IEnumerator _tick;
     }
 }

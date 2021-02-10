@@ -1,32 +1,40 @@
 ﻿using System.Collections;
 using Svelto.Common;
-using Svelto.ECS.Extensions;
-using Svelto.Tasks.Enumerators;
+using Svelto.DataStructures;
 using UnityEngine;
 
 namespace Svelto.ECS.Example.Survive.Characters.Enemies
 {
-    [Sequenced(nameof(EnginesEnum.EnemyDeathEngine))]
+    [Sequenced(nameof(EnemyEnginesNames.EnemyDeathEngine))]
     public class EnemyDeathEngine : IQueryingEntitiesEngine, IStepEngine, IReactOnSwap<EnemyEntityViewComponent>
     {
-        public EnemyDeathEngine
-            (IEntityFunctions entityFunctions, IEntityStreamConsumerFactory consumerFactory, IEntityFactory entityFactory, ITime time)
+        public EnemyDeathEngine(IEntityFunctions entityFunctions, IEntityStreamConsumerFactory consumerFactory, 
+                                ITime time, WaitForSubmissionEnumerator waitForSubmission)
         {
-            _entityFunctions = entityFunctions;
-            _consumerFactory = consumerFactory;
-            _time            = time;
-            _entityFactory = entityFactory;
-            _checkIfDead     = CheckIfDead();
+            _entityFunctions   = entityFunctions;
+            _consumerFactory   = consumerFactory;
+            _time              = time;
+            _waitForSubmission = waitForSubmission;
+            _animations        = new FasterList<IEnumerator>();
+            _consumer = _consumerFactory.GenerateConsumer<DeathComponent>(
+                ECSGroups.EnemiesGroup, "EnemyDeathEngine", 10);
         }
 
         public EntitiesDB entitiesDB { get; set; }
 
-        public void Ready()
-        {
-            _consumer = _consumerFactory.GenerateConsumer<DeathComponent>(ECSGroups.EnemiesGroup, "EnemyDeathEngine", 10);
-        }
+        public void Ready() { }
 
-        public void   Step() { _checkIfDead.MoveNext(); }
+        public void Step()
+        {
+            while (_consumer.TryDequeue(out _, out EGID egid))
+            {
+                _animations.Add(StartSeparateAnimation(egid));
+            }
+            
+            for (int i = 0; i < _animations.count; i++)
+                if (_animations[i].MoveNext() == false)
+                    _animations.UnorderedRemoveAt(i--);
+        }
         public string name   => nameof(EnemyDeathEngine);
 
         /// <summary>
@@ -45,54 +53,34 @@ namespace Svelto.ECS.Example.Survive.Characters.Enemies
             }
         }
 
-        IEnumerator CheckIfDead()
+        IEnumerator StartSeparateAnimation(EGID egid)
         {
-            while (true)
-            {
-                while (_consumer.TryDequeue(out _, out EGID id))
-                {
-                    KillEnemySequence(id).Run();
-                }
+            var enemyView = entitiesDB.QueryEntity<EnemyEntityViewComponent>(egid);
 
-                yield return null;
-            }
-        }
+            enemyView.animationComponent.playAnimation = "Dead";
 
-        IEnumerator KillEnemySequence(EGID egid)
-        {
-            void InitialSetup()
-            {
-                ref var enemyView = ref entitiesDB.QueryEntity<EnemyEntityViewComponent>(egid);
-
-                enemyView.animationComponent.playAnimation = "Dead";
-
-                //Any build/swap/remove do not happen immediately, but at specific sync points
-                //swapping group because we don't want any engine to pick up this entity while it's animating for death
-                _entityFunctions.SwapEntityGroup<EnemyEntityDescriptor>(egid, ECSGroups.EnemiesDeadGroup);
-            }
-
-            InitialSetup();
+            //Any build/swap/remove do not happen immediately, but at specific sync points
+            //swapping group because we don't want any engine to pick up this entity while it's animating for death
+            _entityFunctions.SwapEntityGroup<EnemyEntityDescriptor>(egid, ECSGroups.EnemiesDeadGroup);
 
             //wait for the swap to happen
-            yield return new WaitForSubmissionEnumerator(_entityFunctions, _entityFactory, entitiesDB);
+            while (_waitForSubmission.MoveNext())
+                yield return null;
 
             var wait = new WaitForSecondsEnumerator(2);
-            
-            //new egid after the swap
-            var entityGid = new EGID(egid.entityID, ECSGroups.EnemiesDeadGroup);
 
             while (wait.MoveNext())
             {
-                var enemyView = entitiesDB.QueryEntity<EnemyEntityViewComponent>(entityGid);
-                
                 enemyView.transformComponent.position =
                     enemyView.positionComponent.position + -Vector3.up * 1.2f * _time.deltaTime;
 
                 yield return null;
             }
 
-            var enemyType =
-                entitiesDB.QueryEntity<EnemyComponent>(entityGid).enemyType;
+            //new egid after the swap
+            var entityGid = new EGID(egid.entityID, ECSGroups.EnemiesDeadGroup);
+
+            var enemyType = entitiesDB.QueryEntity<EnemyComponent>(entityGid).enemyType;
 
             //getting ready to recycle it
             _entityFunctions.SwapEntityGroup<EnemyEntityDescriptor>(
@@ -101,9 +89,10 @@ namespace Svelto.ECS.Example.Survive.Characters.Enemies
 
         readonly IEntityFunctions             _entityFunctions;
         readonly IEntityStreamConsumerFactory _consumerFactory;
-        readonly IEnumerator                  _checkIfDead;
         readonly ITime                        _time;
-        readonly IEntityFactory _entityFactory;
-        Consumer<DeathComponent> _consumer;
+
+        Consumer<DeathComponent>         _consumer;
+        WaitForSubmissionEnumerator      _waitForSubmission;
+        readonly FasterList<IEnumerator> _animations;
     }
 }
